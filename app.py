@@ -4004,15 +4004,15 @@ house_premiums = {
 
 # Scraping Sources (uncommented all for full coverage)
 SOURCES = [
-    {'url': 'https://www.tradinggarage.com', 'name': 'tradinggarage'},
+    # {'url': 'https://www.tradinggarage.com', 'name': 'tradinggarage'},
     # {'url': 'https://carbids.com.au/t/unique-and-classic-car-auctions#!?page=1&count=96&filter%5BDisplay%5D=true', 'name': 'carbids'},
-    {'url': 'https://collectingcars.com/buy?refinementList%5BlistingStage%5D%5B0%5D=live&refinementList%5BregionCode%5D%5B0%5D=APAC&refinementList%5BcountryCode%5D%5B0%5D=AU', 'name': 'collectingcars'},
+    # {'url': 'https://collectingcars.com/buy?refinementList%5BlistingStage%5D%5B0%5D=live&refinementList%5BregionCode%5D%5B0%5D=APAC&refinementList%5BcountryCode%5D%5B0%5D=AU', 'name': 'collectingcars'},
     # {'url': 'https://burnsandcoauctions.com.au', 'name': 'burnsandco'},
     # {'url': 'https://www.lloydsonline.com.au/AuctionLots.aspx?smode=0&aid=65946', 'name': 'lloydsonline'},
     # {'url': 'https://www.seven82motors.com.au', 'name': 'seven82motors'},
     # {'url': 'https://www.chicaneauctions.com.au', 'name': 'chicaneauctions'},
     # {'url': 'https://www.doningtonauctions.com.au', 'name': 'doningtonauctions'},
-    # {'url': 'https://www.bennettsclassicauctions.com.au', 'name': 'bennettsclassicauctions'}
+    {'url': 'https://www.bennettsclassicauctions.com.au', 'name': 'bennettsclassicauctions'}
 ]
 
 def get_driver():
