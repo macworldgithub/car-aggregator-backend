@@ -1,0 +1,16 @@
+Flask
+flask-login
+Flask-JWT-Extended
+Flask-Cors
+pymongo
+dnspython
+apscheduler
+python-dotenv
+flasgger
+selenium
+webdriver-manager
+beautifulsoup4
+requests
+python-dateutil
+gunicorn
+lxml
