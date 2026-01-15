@@ -4004,17 +4004,19 @@ house_premiums = {
 
 # Scraping Sources (uncommented all for full coverage)
 SOURCES = [
-    # {'url': 'https://www.tradinggarage.com', 'name': 'tradinggarage'},
-    # {'url': 'https://collectingcars.com/buy?refinementList%5BlistingStage%5D%5B0%5D=live&refinementList%5BregionCode%5D%5B0%5D=APAC&refinementList%5BcountryCode%5D%5B0%5D=AU', 'name': 'collectingcars'},
-    # {'url': 'https://www.bennettsclassicauctions.com.au', 'name': 'bennettsclassicauctions'}
+    {'url': 'https://www.tradinggarage.com', 'name': 'tradinggarage'},
+    {'url': 'https://collectingcars.com/buy?refinementList%5BlistingStage%5D%5B0%5D=live&refinementList%5BregionCode%5D%5B0%5D=APAC&refinementList%5BcountryCode%5D%5B0%5D=AU', 'name': 'collectingcars'},
+    {'url': 'https://www.bennettsclassicauctions.com.au', 'name': 'bennettsclassicauctions'},
 
-    # {'url': 'https://carbids.com.au/t/unique-and-classic-car-auctions#!?page=1&count=96&filter%5BDisplay%5D=true', 'name': 'carbids'},
-    #  {'url': 'https://www.lloydsonline.com.au/AuctionLots.aspx?stype=0&stypeid=0&cid=410&smode=0', 'name': 'lloydsonline'},
-    # {'url': 'https://burnsandcoauctions.com.au', 'name': 'burnsandco'},
+    {'url': 'https://carbids.com.au/t/unique-and-classic-car-auctions#!?page=1&count=96&filter%5BDisplay%5D=true', 'name': 'carbids'},
+     {'url': 'https://www.lloydsonline.com.au/AuctionLots.aspx?stype=0&stypeid=0&cid=410&smode=0', 'name': 'lloydsonline'},
+        {'url': 'https://www.chicaneauctions.com.au', 'name': 'chicaneauctions'},
+
    
-    # {'url': 'https://www.seven82motors.com.au', 'name': 'seven82motors'},
-    {'url': 'https://www.chicaneauctions.com.au', 'name': 'chicaneauctions'},
+    {'url': 'https://www.seven82motors.com.au', 'name': 'seven82motors'},
+
     # {'url': 'https://www.doningtonauctions.com.au', 'name': 'doningtonauctions'},
+        # {'url': 'https://burnsandcoauctions.com.au', 'name': 'burnsandco'},
 ]
 
 def get_driver():
@@ -4059,6 +4061,8 @@ def scrape_site(source):
         return scrape_lloydsonline()
     elif name == 'chicaneauctions':
         return scrape_chicane()
+    elif name == 'seven82motors':
+        return scrape_seven82motors()
     else:
         # Generic scraper for other sites
         try:
@@ -5033,7 +5037,195 @@ def scrape_burnsandco(base_url):
         except Exception as e:
             pass
     return all_listings
+from datetime import datetime, timezone, timedelta
+import requests
+import re
+from dateutil.parser import parse
 
+def scrape_seven82motors():
+    """
+    Scrape upcoming lots from seven82motors.com.au using their JSON feed.
+    Example endpoint: https://seven82-json-sb.manage.auction/listings/auctions/march-29th-2026?amt=100
+    
+    Returns list of lot dictionaries matching your existing schema.
+    """
+    listings = []
+    
+    # For now using a known upcoming auction slug
+    # In production: you should discover current/upcoming slugs dynamically
+    auction_slug = "march-29th-2026"
+    api_url = f"https://seven82-json-sb.manage.auction/listings/auctions/{auction_slug}?amt=100"
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                      '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Referer': 'https://www.seven82motors.com.au/',
+    }
+    
+    try:
+        resp = requests.get(api_url, headers=headers, timeout=20)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        auction_title = data.get("heading", "Unknown Auction Date")
+        
+        # Try to parse auction date from breadcrumbs or heading
+        auction_date = None
+        try:
+            bc_title = data.get("breadcrumbs", [{}])[0].get("title", "")
+            if bc_title and any(m in bc_title.lower() for m in ["mar", "march", "apr", "may"]):
+                # e.g. "Mar 29, 2026"
+                auction_date = parse(f"{bc_title} 2026", fuzzy=True)
+        except:
+            pass
+        
+        if not auction_date:
+            try:
+                auction_date = parse(auction_title, fuzzy=True)
+            except:
+                auction_date = datetime.now(timezone.utc) + timedelta(days=45)  # reasonable fallback
+        
+        items = data.get("items", [])
+        
+        for item in items:
+            # Skip advertising / consignment slots
+            if item.get("dummy_lot", 0) == 1:
+                continue
+                
+            title = (item.get("title") or "").strip()
+            if not title:
+                continue
+                
+            # Skip obvious non-car listings
+            if any(phrase in title.upper() for phrase in [
+                "SELL YOUR CAR", "CONSIGN", "REGISTER AND BID", "LEARN HOW TO"
+            ]):
+                continue
+                
+            # ────────────────────────────────────────────────
+            # Year / Make / Model parsing
+            # ────────────────────────────────────────────────
+            year = None
+            make = ""
+            model = ""
+            
+            # Remove common prefixes
+            clean_title = re.sub(
+                r'^(NO RESERVE!?\s*|RARE\s*|FULLY RESTORED\s*|CUSTOM\s*)',
+                '', title, flags=re.IGNORECASE
+            ).strip()
+            
+            # Common patterns: "1969 Holden HT 350 GTS Monaro"
+            #                 "1972 Ford 4x4 Bronco"
+            m = re.match(r'^(\d{4})\s+(.+?)(?:\s+(.+?))?(?:\s+|$)', clean_title)
+            if m:
+                try:
+                    year = int(m.group(1))
+                except:
+                    pass
+                make_model_part = (m.group(2) or "").strip()
+                extra = (m.group(3) or "").strip()
+                
+                # Simple split - will not be perfect but good enough for filtering
+                parts = make_model_part.split(maxsplit=1)
+                if parts:
+                    make = parts[0].strip()
+                    if len(parts) > 1:
+                        model = parts[1].strip()
+                    model = f"{model} {extra}".strip()
+            
+            # Reserve status from title (very reliable on this site)
+            reserve = "No" if "NO RESERVE" in title.upper() else "Yes"
+            
+            # ────────────────────────────────────────────────
+            # Images
+            # ────────────────────────────────────────────────
+            images = []
+            
+            # 1. media_featured → list of dicts
+            featured = item.get("media_featured", [])
+            if isinstance(featured, list):
+                for img_obj in featured:
+                    if isinstance(img_obj, dict):
+                        src = img_obj.get("src")
+                        if src:
+                            if src.startswith("/"):
+                                src = "https://www.seven82motors.com.au" + src
+                            elif not src.startswith("http"):
+                                src = "https://www.seven82motors.com.au/" + src
+                            if src not in images:
+                                images.append(src)
+            
+            # 2. fallback to main image field
+            main_img = item.get("image")
+            if main_img and main_img not in images:
+                if main_img.startswith("catalog/"):
+                    main_img = "https://www.seven82motors.com.au/" + main_img
+                images.insert(0, main_img)
+            
+            # Deduplicate while preserving order
+            seen = set()
+            images = [x for x in images if x not in seen and not seen.add(x)]
+            
+            # ────────────────────────────────────────────────
+            # Coming soon flag – safely handled
+            # ────────────────────────────────────────────────
+            is_coming_soon = False
+            coming_soon_data = item.get("coming_soon", [])
+            if isinstance(coming_soon_data, list):
+                for entry in coming_soon_data:
+                    if isinstance(entry, dict):
+                        settings = entry.get("settings", {})
+                        if settings.get("coming_soon") in (True, "1", 1, "true"):
+                            is_coming_soon = True
+                            break
+            
+            # ────────────────────────────────────────────────
+            # Build lot document
+            # ────────────────────────────────────────────────
+            lot_url = f"https://www.seven82motors.com.au/auctions/{item.get('path', '').lstrip('/')}"
+            
+            lot = {
+                'source': 'seven82motors',
+                'status': 'upcoming',
+                'auction_id': item.get("id"),
+                'lot_number': item.get("number"),
+                'title': title,
+                'year': year,
+                'make': make,
+                'model': model,
+                'odometer': None,                    # detail page only
+                'price_range': None,                 # not visible in list
+                'auction_date': auction_date,
+                'location': "Brisbane, QLD (Online)",
+                'images': images[:12],               # reasonable limit
+                'url': lot_url,
+                'description': (item.get("description_short") or "").strip(),
+                'reserve': reserve,
+                'body_style': None,
+                'transmission': None,
+                'fuel_type': None,
+                'scrape_time': datetime.now(timezone.utc),
+                
+                # Optional / diagnostic fields
+                'coming_soon': is_coming_soon,
+                'buyers_premium_pct': 8.8,           # hard-coded from feed
+                'raw_filters': item.get("filters", {}),
+            }
+            
+            # Only keep if it passes your classic car filter
+            if is_classic(lot):
+                listings.append(lot)
+        
+        print(f"[seven82motors] Scraped {len(listings)} potential classic lots from '{auction_title}'")
+        
+    except Exception as e:
+        print(f"[seven82motors] Error scraping {auction_slug}: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return listings
 def scrape_catalogue(catalogue_url):
     listings = []
     try:
@@ -5136,15 +5328,43 @@ def extract_transmission(desc):
     if 'auto' in lower_desc or 'automatic' in lower_desc:
         return 'Automatic'
     return None
-
 def is_classic(lot):
-    year = lot.get('year', 0)
-    desc = lot.get('description', '').lower() + ' ' + lot.get('title', '').lower()
+    """
+    Determine if a lot should be considered a 'classic' car.
+    Safe against missing/invalid year values.
+    """
+    year = lot.get('year')
+    
+    # If year is missing or not a number → treat as non-classic (or adjust logic)
+    if year is None or not isinstance(year, (int, float)):
+        # Optional: look in title/description for clues
+        text = (lot.get('title', '') + ' ' + lot.get('description', '')).lower()
+        has_classic_hint = any(word in text for word in [
+            'classic', 'muscle', 'vintage', 'hot rod', 'restored', 'collector',
+            'holden', 'falcon gt', 'monaro', 'charger', 'mustang', 'corvette'
+        ])
+        return has_classic_hint
+    
+    # Normal year-based rule
     if year < 2005:
         return True
-    elif any(word in desc for word in ['collector', 'classic', 'future classic', 'modern classic', 'muscle']):
-        return True
-    return False
+    
+    # Bonus: some newer cars are "future classics" or muscle
+    text = (lot.get('title', '') + ' ' + lot.get('description', '')).lower()
+    modern_classic_keywords = [
+        'hellcat', 'demon', 'supercharged', 'stroker', 'r8', 'gts-r', 'boss 302',
+        'shelby', 'a9x', 'fpv', 'gtr', 'torana', 'monaro'
+    ]
+    
+    return any(kw in text for kw in modern_classic_keywords)
+# def is_classic(lot):
+#     year = lot.get('year', 0)
+#     desc = lot.get('description', '').lower() + ' ' + lot.get('title', '').lower()
+#     if year < 2005:
+#         return True
+#     elif any(word in desc for word in ['collector', 'classic', 'future classic', 'modern classic', 'muscle']):
+#         return True
+#     return False
 # def is_classic(lot):
 #     year = lot.get('year', 0)
 #     text = (lot['description'].lower() if lot['description'] else '') + ' ' + (lot['title'].lower() if lot['title'] else '')
