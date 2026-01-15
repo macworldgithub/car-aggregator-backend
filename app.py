@@ -4256,137 +4256,150 @@ def scrape_collectingcars():
     return listings
 
 def scrape_chicane(url='https://www.chicaneauctions.com.au/february-2026-classic-car-auction/'):
+
+
     """
     Scrape classic car auctions from chicaneauctions.com.au
+    Updated: Jan 2026 - better link detection, stronger placeholder filtering
     """
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                      '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
+
     try:
         resp = requests.get(url, headers=headers, timeout=20)
-        if resp.status_code != 200:
-            print(f"Chicane returned {resp.status_code}")
-            return []
-        html_content = resp.text
+        resp.raise_for_status()
     except Exception as e:
-        print(f"Error fetching Chicane: {e}")
+        print(f"Error fetching Chicane page: {e}")
         return []
 
-    soup = BeautifulSoup(html_content, 'html.parser')
+    soup = BeautifulSoup(resp.text, 'html.parser')
     listings = []
     base_url = 'https://www.chicaneauctions.com.au'
 
     for item in soup.select('.promo_box'):
         try:
-            # Link and URL
-            link = item.select_one('.desc_wrapper a')
-            relative_href = link.get('href', None) if link else None
-            full_url = base_url + relative_href if relative_href and not relative_href.startswith('http') else relative_href
+            # ── Get the MAIN link (prefer the "MORE DETAILS" button) ──
+            button = item.select_one('.desc_wrapper .button')
+            link = button if button else item.select_one('.desc_wrapper a')
+            
+            if not link:
+                continue
+                
+            relative_href = link.get('href', '').strip()
+            if not relative_href:
+                continue
+                
+            full_url = relative_href if relative_href.startswith('http') else base_url + relative_href
 
-            # Lot number - not explicitly present; infer from title or URL if possible
-            lot_num = None
-            if full_url:
-                lot_match = re.search(r'lot-(\d+)', full_url)
-                if lot_match:
-                    lot_num = lot_match.group(1)
-                else:
-                    # Fallback: extract from title if pattern like "LOT 1170"
-                    title_text = item.select_one('.desc_wrapper .title').text.strip() if item.select_one('.desc_wrapper .title') else ''
-                    lot_match_title = re.search(r'lot (\d+)', title_text, re.IGNORECASE)
-                    if lot_match_title:
-                        lot_num = lot_match_title.group(1)
+            # ── Early skip obvious placeholders ──
+            if '/sell/' in full_url.lower():
+                continue
 
-            # Image
+            # Title
+            title_tag = item.select_one('.desc_wrapper .title')
+            title = title_tag.get_text(strip=True) if title_tag else ''
+            if not title:
+                continue
+
+            title_upper = title.upper()
+            if '- OPEN POSITION -' in title_upper or 'STAY TUNED' in title_upper:
+                continue
+
+            # ── Image ──
             img_tag = item.select_one('.photo_wrapper img')
-            img_src = img_tag.get('data-src', img_tag.get('src', None)) if img_tag else None
-            if img_src and img_src.startswith('//'):
-                img_src = 'https:' + img_src
+            img_src = None
+            if img_tag:
+                img_src = img_tag.get('data-src') or img_tag.get('src')
+                if img_src and img_src.startswith('//'):
+                    img_src = 'https:' + img_src
+            
+            # Skip well-known placeholder image
+            if not img_src or 'upcoming-classic-car-auction-house.png' in img_src:
+                continue
+
             images = [img_src] if img_src else []
 
-            # Title / Description
-            title_tag = item.select_one('.desc_wrapper .title')
-            title = title_tag.text.strip() if title_tag else ''
+            # ── Lot number ──
+            lot_num = None
+            # Try from URL
+            m = re.search(r'(?:lot[-_\s]*)(\d+)', full_url, re.IGNORECASE)
+            if m:
+                lot_num = m.group(1)
+            # Fallback: try from title
+            if not lot_num:
+                m = re.search(r'(?:lot|Lot|LOT)\s*(\d+)', title, re.IGNORECASE)
+                if m:
+                    lot_num = m.group(1)
 
-            # Parse year, make, model from title (common pattern: "YYYY MAKE MODEL ...")
+            # ── Year / Make / Model parsing ──
             year = None
             make = ''
             model = ''
-            m = re.match(r'^(\d{4})\s+(.+?)\s+(.+?)(?:\s+|$)', title)
+
+            # Common pattern: "1970 FORD FALCON XY GT" or "1965 FORD MUSTANG FB GT - RHD"
+            m = re.match(r'^(\d{4})\s+([A-Za-z0-9\-]+(?:\s+[A-Za-z0-9\-]+)*?)(?:\s+(.+?))?(?:\s*-|$)', title.strip())
             if m:
-                year_str = m.group(1)
                 try:
-                    year = int(year_str)
+                    year = int(m.group(1))
                 except:
                     pass
-                make = m.group(2).strip()
-                model = m.group(3).strip()
+                make = (m.group(2) or '').strip()
+                model = (m.group(3) or '').strip()
 
-            # Current bid - not available on pre-catalogue page
-            current_bid = None
+            # Fallback - at least try to get year anywhere in title
+            if not year:
+                ym = re.search(r'\b(19\d{2}|20\d{2})\b', title)
+                if ym:
+                    year = int(ym.group(1))
 
-            # Time remaining / Auction end - not specified; assume February 2026, but exact date unknown
-            # For now, set as None or placeholder; can refine later
-            auction_end = None  # Could parse from page content if available
-
-            # Location - fixed for Chicane: Melbourne, VIC, Australia
+            # ── Build lot dictionary ──
             location = {
                 'city': 'Melbourne',
                 'state': 'VIC',
-                'country': 'Australia',
+                'country': 'Australia'
             }
 
-            # Reserve - not specified
-            reserve = 'Unknown'
-
-            # Vehicle specs
-            vehicle = {
-                'year': year,
-                'make': make,
-                'model': model,
-                # Add more if details available (none in list view)
-            }
-
-            # Price info
-            price = {
-                'current': current_bid,
-                # No starting bid
-            }
-
-            # Condition (use title as comment)
-            condition = {
-                'comment': title,
-            }
-
-            # Filter out placeholders like "- OPEN POSITION -" or links to /sell/
-            if '- OPEN POSITION -' in title or 'STAY TUNED' in link.text.strip().upper() or '/sell/' in full_url:
-                continue  # Skip non-active lots
-
-            # Build lot dict
             lot = {
                 'source': 'chicaneauctions',
-                'auction_id': lot_num or title.replace(' ', '_').lower(),  # Fallback ID
+                'auction_id': lot_num or title.lower().replace(' ', '-').replace('--', '-'),
                 'title': title,
                 'url': full_url,
                 'year': year,
                 'make': make,
                 'model': model,
-                'vehicle': vehicle,
-                'price': price,
-                'auction_end': auction_end,
+                'vehicle': {
+                    'year': year,
+                    'make': make,
+                    'model': model,
+                },
+                'price': {
+                    'current': None,        # not shown on pre-catalogue
+                    'reserve': 'Unknown',
+                },
+                'auction_end': None,        # not shown yet
                 'location': location,
                 'images': images,
-                'condition': condition,
-                'reserve': reserve,
-                'status': 'upcoming',  # Since it's pre-catalogue
-                'scrape_time': datetime.utcnow(),
+                'condition': {
+                    'comment': title,       # can be improved later from detail page
+                },
+                'status': 'upcoming',
+                'scrape_time': datetime.utcnow().isoformat(),
             }
-            # Assume an is_classic function to filter; for now, add all
-            if is_classic(lot):  # Reuse if defined, else assume True
+
+            # Only add if it looks like a real classic car
+            if is_classic(lot):
                 listings.append(lot)
 
-        except Exception as e:
-            print(f"Error parsing Chicane lot: {str(e)}")
+                # Optional: debug output (comment out when done)
+                print(f"Added: {lot['title']} | {lot['url']} | Year: {year}")
 
+        except Exception as e:
+            print(f"Error parsing one Chicane promo_box: {e}")
+            continue
+
+    print(f"Total real listings found: {len(listings)}")
     return listings
 
 def scrape_lloydsonline(url='https://www.lloydsonline.com.au/AuctionLots.aspx?stype=0&stypeid=0&cid=410&smode=0'):
