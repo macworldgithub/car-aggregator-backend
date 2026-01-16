@@ -4758,160 +4758,7 @@ def scrape_carbids_api():
             break
 
     return listings
-# def scrape_carbids(base_url):
-#     listings = []
-#     # Browser strategy (omitted prints)
-#     try:
-#         driver = get_driver()
-#         driver.set_window_size(1400, 900)
-#         clean_url = base_url.split('#')[0]
-#         driver.get(clean_url)
-#         WebDriverWait(driver, 25).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.wrapper.col-lg-4")))
-#         last_height = driver.execute_script("return document.body.scrollHeight")
-#         scroll_attempts = 0
-#         max_scrolls = 12
-#         while scroll_attempts < max_scrolls:
-#             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-#             time.sleep(1.8 + scroll_attempts * 0.3)
-#             new_height = driver.execute_script("return document.body.scrollHeight")
-#             if new_height == last_height:
-#                 scroll_attempts += 1
-#             else:
-#                 scroll_attempts = 0
-#                 last_height = new_height
-#         time.sleep(4)
-#         soup = BeautifulSoup(driver.page_source, 'html.parser')
-#         driver.quit()
-#         lot_divs = soup.select('div.wrapper.col-lg-4.col-md-6.col-sm-6.mobile-margin')
-#         if lot_divs:
-#             for div in lot_divs:
-#                 lot = {}
-#                 title_elem = div.select_one('h3.h5.p-b-10')
-#                 title = title_elem.get_text(strip=True) if title_elem else ''
-#                 m = re.match(r'(\d{1,2}/\d{4})\s+([^/]+?)\s+(.+?)(?:\s*\([^)]+\))?$', title)
-#                 year_str = m.group(1).strip() if m else ''
-#                 try:
-#                     year = int(year_str.split('/')[-1])
-#                 except:
-#                     year = 0
-#                 lot['year'] = year
-#                 lot['make'] = m.group(2).strip() if m else ''
-#                 lot['model'] = m.group(3).strip() if m else title
-#                 def get_next_text(icon_class):
-#                     i = div.select_one(f'i.{icon_class.replace(" ", ".")}')
-#                     if i:
-#                         txt = i.next_sibling
-#                         return txt.strip() if txt and isinstance(txt, str) else ''
-#                     return ''
-#                 lot['odometer'] = get_next_text('fas fa-tachometer-alt')
-#                 lot['transmission'] = get_next_text('fas fa-cogs')
-#                 lot['fuel_type'] = get_next_text('fas fa-gas-pump')
-#                 lot['engine'] = get_next_text('fas fa-oil-can')
-#                 price_big = div.select_one('span.h2')
-#                 price_str = price_big.get_text(strip=True) if price_big else ''
-#                 if not price_str:
-#                     start_price = div.select_one('span.h4')
-#                     price_str = start_price.get_text(strip=True) if start_price else 'Auction TBA'
-#                 lot['price_range'] = parse_price(price_str)
-#                 countdown = div.select_one('span[id^="closingCountdownTextGrid"]')
-#                 calendar_span = div.select_one('span[id^="closingTimeGrid"]')
-#                 calendar_text = calendar_span.get_text(strip=True).strip('()[] ') if calendar_span else ''
-#                 try:
-#                     lot['auction_date'] = parse(calendar_text)
-#                 except:
-#                     lot['auction_date'] = None
-#                 loc_div = div.select_one('div.bgm-white.p-5.m-r-5.p-l-15.p-r-15')
-#                 city = loc_div.get_text(strip=True) if loc_div else ''
-#                 state_span = div.select_one('span.p-5[style*="float: right"]')
-#                 state = state_span.get_text(strip=True) if state_span else ''
-#                 lot['location'] = f"{city} {state}".strip()
-#                 ref = div.select_one('mark.h5.p-t-5.p-b-5.p-r-10.p-l-10')
-#                 lot['reference_number'] = ref.get_text(strip=True) if ref else ''
-#                 imgs = div.select('img.img-responsive')
-#                 lot['images'] = []
-#                 for img in imgs:
-#                     src = img.get('ng-src') or img.get('src') or ''
-#                     if src:
-#                         if src.startswith('//'): src = 'https:' + src
-#                         lot['images'].append(src)
-#                 a = div.select_one('a[ng-href]')
-#                 lot['url'] = a['ng-href'] if a else clean_url
-#                 lot['description'] = ' '.join(filter(None, [lot.get('odometer'), lot.get('transmission'), lot.get('fuel_type'), lot.get('engine')]))
-#                 lot['reserve'] = 'Yes'
-#                 lot['body_style'] = extract_body_style(lot['description'])
-#                 lot['transmission'] = lot.get('transmission', extract_transmission(lot['description']))
-#                 lot['scrape_time'] = datetime.utcnow()
-#                 lot['source'] = 'carbids'
-#                 if is_classic(lot):
-#                     listings.append(lot)
-#             if listings:
-#                 return listings
-#     except Exception as e:
-#         pass
 
-#     # API fallback
-#     try:
-#         s = requests.Session()
-#         s.headers.update({
-#             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-#             'Accept': 'application/json, text/plain, */*',
-#             'X-Requested-With': 'XMLHttpRequest',
-#         })
-#         r = s.get(base_url.split('#')[0])
-#         soup_init = BeautifulSoup(r.text, 'html.parser')
-#         token_input = soup_init.find('input', {'name': '__RequestVerificationToken'})
-#         if token_input:
-#             s.headers['__RequestVerificationToken'] = token_input['value']
-#         page = 0
-#         while True:
-#             payload = {
-#                 "top": 96,
-#                 "skip": page * 96,
-#                 "sort": {"aucClose": "asc"},
-#                 "tagName": "Unique and Classic Car Auctions",
-#                 "filter": {"Display": True}
-#             }
-#             resp = s.post("https://carbids.com.au/Search/Tags", json=payload, timeout=20)
-#             if resp.status_code != 200:
-#                 break
-#             data = resp.json()
-#             auctions = data.get('auctions', [])
-#             if not auctions:
-#                 break
-#             for auc in auctions:
-#                 year_str = str(auc.get('aucYear', ''))
-#                 try:
-#                     year = int(year_str)
-#                 except:
-#                     year = 0
-#                 price_str = auc.get('aucCurrentBid', 0) or 'Auction TBA'
-#                 lot = {
-#                     'source': 'carbids',
-#                     'url': auc.get('AucDetailsUrlLink', base_url),
-#                     'reference_number': auc.get('aucReferenceNo', ''),
-#                     'year': year,
-#                     'make': auc.get('aucMake', ''),
-#                     'model': auc.get('aucModel', ''),
-#                     'odometer': auc.get('aucOdometer', ''),
-#                     'transmission': auc.get('aucTransmission', ''),
-#                     'fuel_type': auc.get('aucFuelType', ''),
-#                     'engine': f"{auc.get('aucCapacity','')} {auc.get('aucCylinder','')} cyl",
-#                     'price_range': parse_price(price_str),
-#                     'location': f"{auc.get('aucCity','')} {auc.get('aucState','')}".strip(),
-#                     'images': [auc.get('aucCarsThumbnailUrl')] + (auc.get('aucMediumThumbnailUrlList', []) or []),
-#                     'auction_date': parse(auc['aucCloseUtc']) if auc.get('aucCloseUtc') else None,
-#                     'description': auc.get('aucTitle', ''),
-#                     'reserve': 'Yes',
-#                     'body_style': extract_body_style(auc.get('aucTitle', '')),
-#                     'scrape_time': datetime.utcnow(),
-#                 }
-#                 if is_classic(lot):
-#                     listings.append(lot)
-#             page += 1
-#             time.sleep(1.4)
-#     except Exception as e:
-#         pass
-#     return listings
 
 def scrape_carbids(base_url):
     # Keep your existing browser-based scraper if you still want it
@@ -5100,15 +4947,20 @@ def scrape_bennetts(base_url="https://www.bennettsclassicauctions.com.au"):
             traceback.print_exc()
     return all_listings
 
-def scrape_burnsandco(base_url):
+
+from urllib.parse import urljoin
+
+def scrape_burnsandco(base_url="https://burnsandcoauctions.com.au"):
     pages = [base_url + '/current-auctions/', base_url + '/upcoming-auctions/']
     all_listings = []
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
     for page_url in pages:
         try:
-            driver = get_driver()
-            driver.get(page_url)
-            soup = BeautifulSoup(driver.page_source, 'html.parser')
-            driver.quit()
+            resp = requests.get(page_url, headers=headers, timeout=20)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, 'html.parser')
             articles = soup.find_all('article', class_='regular masonry-blog-item')
             for article in articles:
                 img_link = article.find('a', class_='img-link')
@@ -5139,8 +4991,11 @@ def scrape_burnsandco(base_url):
                         cat_lot['source'] = 'burnsandco'
                         all_listings.append(cat_lot)
         except Exception as e:
-            pass
+            print(f"Error scraping Burns and Co ({page_url}): {str(e)}")
+            import traceback
+            traceback.print_exc()
     return all_listings
+
 from datetime import datetime, timezone, timedelta
 import requests
 import re
@@ -5330,51 +5185,109 @@ def scrape_seven82motors():
         traceback.print_exc()
     
     return listings
+# def scrape_catalogue(catalogue_url):
+#     listings = []
+#     try:
+#         driver = get_driver()
+#         driver.get(catalogue_url)
+#         soup = BeautifulSoup(driver.page_source, 'html.parser')
+#         driver.quit()
+#         lot_items = soup.find_all('div', class_='lot-item')  # Placeholder, adjust based on site inspection
+#         for item in lot_items:
+#             lot_number = item.find('span', class_='lot-number').text.strip() if item.find('span', class_='lot-number') else ''
+#             desc = item.find('div', class_='lot-description').text.strip() if item.find('div', class_='lot-description') else ''
+#             match = re.match(r'(\d{4})? ?(.*?) (.*)', desc)
+#             year_str = match.group(1) if match and match.group(1) else ''
+#             try:
+#                 year = int(year_str)
+#             except:
+#                 year = 0
+#             make = match.group(2) if match else ''
+#             model = match.group(3) if match else desc
+#             images = [img['src'] for img in item.find_all('img')]
+#             detail_a = item.find('a', class_='lot-detail')
+#             detail_url = catalogue_url + detail_a['href'] if detail_a else ''
+#             current_bid = item.find('span', class_='current-bid').text.strip() if item.find('span', class_='current-bid') else ''
+#             lot = {
+#                 'lot_number': lot_number,
+#                 'make': make,
+#                 'model': model,
+#                 'year': year,
+#                 'price_range': parse_price(current_bid),
+#                 'auction_date': None,
+#                 'location': None,
+#                 'images': images,
+#                 'url': detail_url,
+#                 'description': desc,
+#                 'reserve': 'Yes',
+#                 'body_style': extract_body_style(desc),
+#                 'transmission': extract_transmission(desc),
+#                 'scrape_time': datetime.now()
+#             }
+#             if is_classic(lot):
+#                 listings.append(lot)
+#     except Exception as e:
+#         pass
+#     return listings
+
+from urllib.parse import urljoin
+
 def scrape_catalogue(catalogue_url):
     listings = []
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
     try:
-        driver = get_driver()
-        driver.get(catalogue_url)
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-        driver.quit()
-        lot_items = soup.find_all('div', class_='lot-item')  # Placeholder, adjust based on site inspection
-        for item in lot_items:
-            lot_number = item.find('span', class_='lot-number').text.strip() if item.find('span', class_='lot-number') else ''
-            desc = item.find('div', class_='lot-description').text.strip() if item.find('div', class_='lot-description') else ''
-            match = re.match(r'(\d{4})? ?(.*?) (.*)', desc)
-            year_str = match.group(1) if match and match.group(1) else ''
-            try:
-                year = int(year_str)
-            except:
-                year = 0
-            make = match.group(2) if match else ''
-            model = match.group(3) if match else desc
-            images = [img['src'] for img in item.find_all('img')]
-            detail_a = item.find('a', class_='lot-detail')
-            detail_url = catalogue_url + detail_a['href'] if detail_a else ''
-            current_bid = item.find('span', class_='current-bid').text.strip() if item.find('span', class_='current-bid') else ''
-            lot = {
-                'lot_number': lot_number,
-                'make': make,
-                'model': model,
-                'year': year,
-                'price_range': parse_price(current_bid),
-                'auction_date': None,
-                'location': None,
-                'images': images,
-                'url': detail_url,
-                'description': desc,
-                'reserve': 'Yes',
-                'body_style': extract_body_style(desc),
-                'transmission': extract_transmission(desc),
-                'scrape_time': datetime.now()
-            }
-            if is_classic(lot):
-                listings.append(lot)
+        resp = requests.get(catalogue_url, headers=headers, timeout=20)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        # Assume lots are in a table; adjust if needed based on inspection
+        table = soup.find('table')  # Or find('table', class_='catalogue-table') if specific class
+        if table:
+            trs = table.find_all('tr')
+            for tr in trs[1:]:  # Skip header row
+                tds = tr.find_all('td')
+                if len(tds) < 4:
+                    continue
+                lot_number = tds[0].text.strip()
+                desc_td = tds[1]
+                desc = desc_td.text.strip()
+                match = re.match(r'(\d{4})? ?(.*?) (.*)', desc)
+                year_str = match.group(1) if match and match.group(1) else ''
+                try:
+                    year = int(year_str)
+                except:
+                    year = 0
+                make = match.group(2) if match else ''
+                model = match.group(3) if match else desc
+                images = [urljoin(catalogue_url, img['src']) for img in tr.find_all('img') if 'src' in img.attrs]
+                detail_a = desc_td.find('a')
+                detail_url = urljoin(catalogue_url, detail_a['href']) if detail_a else ''
+                current_bid = tds[2].text.strip()
+                # bids = tds[3].text.strip() if len(tds) > 3 else ''
+                lot = {
+                    'lot_number': lot_number,
+                    'make': make,
+                    'model': model,
+                    'year': year,
+                    'price_range': parse_price(current_bid),
+                    'auction_date': None,
+                    'location': None,
+                    'images': images,
+                    'url': detail_url,
+                    'description': desc,
+                    'reserve': 'Yes',
+                    'body_style': extract_body_style(desc),
+                    'transmission': extract_transmission(desc),
+                    'scrape_time': datetime.now(timezone.utc)
+                }
+                if is_classic(lot):
+                    listings.append(lot)
     except Exception as e:
-        pass
+        print(f"Error scraping catalogue ({catalogue_url}): {str(e)}")
+        import traceback
+        traceback.print_exc()
     return listings
-
 def parse_lot(item, url):
     try:
         description = item.find('p', class_='desc') or item.find('div', class_='description')
