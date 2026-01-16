@@ -5855,6 +5855,5 @@ def auction_houses():
 # Initial scrape
 # scrape_all()
 
-# Option A – explicit port 8000 (very common for dev)
 if __name__ == '__main__':
     app.run(debug=False, port=9007)
