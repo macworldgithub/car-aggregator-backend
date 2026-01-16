@@ -4019,9 +4019,23 @@ SOURCES = [
         # {'url': 'https://burnsandcoauctions.com.au', 'name': 'burnsandco'},
 ]
 
+# def get_driver():
+#     options = Options()
+#     options.headless = True
+#     service = Service(ChromeDriverManager().install())
+#     return webdriver.Chrome(service=service, options=options)
+
 def get_driver():
     options = Options()
-    options.headless = True
+    options.add_argument('--headless')  # Modern way to set headless mode
+    options.add_argument('--disable-gpu')  # Often needed for headless
+    options.add_argument('--window-size=1920,1080')  # Avoids some rendering issues
+
+    if platform.system() == 'Linux':
+        options.add_argument('--no-sandbox')  # Critical for Linux servers
+        options.add_argument('--disable-dev-shm-usage')  # Handles small /dev/shm in containers
+        options.add_argument('--remote-debugging-port=9222')  # For stability in some envs
+
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=options)
 
@@ -4918,7 +4932,7 @@ def scrape_carbids(base_url):
             unique.append(lot)
 
     return unique
-def scrape_bennetts(base_url):
+# def scrape_bennetts(base_url):
     pages = [base_url, base_url + '/off-site.php']
     all_listings = []
     for page_url in pages:
@@ -4994,6 +5008,96 @@ def scrape_bennetts(base_url):
                                     all_listings.append(lot)
         except Exception as e:
             pass
+    return all_listings
+
+def scrape_bennetts(base_url="https://www.bennettsclassicauctions.com.au"):
+    pages = [base_url, base_url + '/off-site.php']
+    all_listings = []
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    for page_url in pages:
+        try:
+            resp = requests.get(page_url, headers=headers, timeout=20)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, 'html.parser')
+
+            # Extract auction text for date
+            sitename = soup.find('div', id='sitename')
+            h3 = sitename.find('h3') if sitename else None
+            auction_text = h3.text.strip() if h3 else ''
+            date_match = re.search(r'(\d{1,2}[ST|ND|RD|TH]{0,2} \w+ \d{4})', auction_text.upper())
+            time_match = re.search(r'@ (\d{1,2}[AP]M)', auction_text.upper())
+            auction_date_str = ''
+            if date_match:
+                date_str = re.sub(r'([ST|ND|RD|TH])', '', date_match.group(1))
+                auction_date_str += date_str
+            if time_match:
+                auction_date_str += ' ' + time_match.group(1)
+            auction_date = None
+            try:
+                auction_date = parse(auction_date_str)
+            except:
+                pass
+
+            # Find sections with listings
+            sections = soup.find_all('div', class_='clear')
+            for section in sections:
+                column = section.find('div', class_='column column-600 column-left')
+                if column:
+                    h3_cat = column.find('h3')
+                    category = h3_cat.text.strip() if h3_cat else ''
+                    table = column.find('table')
+                    if table:
+                        tbody = table.find('tbody')
+                        trs = tbody.find_all('tr') if tbody else table.find_all('tr')
+                        for tr in trs[1:]:  # Skip header
+                            tds = tr.find_all('td')
+                            if len(tds) >= 7:  # Ensure enough columns
+                                photo_td = tds[0]
+                                a = photo_td.find('a')
+                                detail_url = base_url + '/' + a['href'].lstrip('/') if a else ''
+                                img = photo_td.find('img')
+                                image_src = base_url + '/' + img['src'].lstrip('/') if img and img['src'].startswith('images') else (img['src'] if img else '')
+
+                                make = tds[1].text.strip()
+                                stock_model = tds[2].text.strip()
+                                parts = stock_model.split('/')
+                                stock_ref = parts[0].strip() if parts else ''
+                                model = parts[1].strip() if len(parts) > 1 else stock_model
+
+                                year_str = tds[3].text.strip()
+                                try:
+                                    year = int(year_str)
+                                except:
+                                    year = 0
+
+                                options = tds[4].text.strip()
+                                location_td = tds[5]
+                                location = location_td.text.strip().replace('\n', '').replace('br /', '')
+
+                                lot = {
+                                    'source': 'bennettsclassicauctions',
+                                    'make': make,
+                                    'model': model,
+                                    'year': year,
+                                    'price_range': None,
+                                    'auction_date': auction_date,
+                                    'location': location,
+                                    'images': [image_src] if image_src else [],
+                                    'url': detail_url,
+                                    'description': options,
+                                    'reserve': 'Yes',
+                                    'body_style': extract_body_style(options),
+                                    'transmission': extract_transmission(options),
+                                    'scrape_time': datetime.now(timezone.utc)
+                                }
+                                if is_classic(lot):
+                                    all_listings.append(lot)
+        except Exception as e:
+            print(f"Error scraping Bennetts ({page_url}): {str(e)}")
+            import traceback
+            traceback.print_exc()
     return all_listings
 
 def scrape_burnsandco(base_url):
