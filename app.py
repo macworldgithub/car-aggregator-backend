@@ -3904,6 +3904,7 @@
 #     app.run(debug=False)
 import os
 import datetime
+from math import ceil
 from datetime import timedelta
 import requests
 from bs4 import BeautifulSoup
@@ -5644,11 +5645,10 @@ def calendar():
         } for r in results
     ]
     return jsonify(formatted)
-
 @app.route('/api/search', methods=['GET'])
 @swag_from({
     'tags': ['Auctions'],
-    'summary': 'Search for lots',
+    'summary': 'Search for lots with pagination',
     'parameters': [
         {'name': 'make', 'in': 'query', 'type': 'string'},
         {'name': 'model', 'in': 'query', 'type': 'string'},
@@ -5664,21 +5664,109 @@ def calendar():
         {'name': 'body_style', 'in': 'query', 'type': 'string'},
         {'name': 'transmission', 'in': 'query', 'type': 'string'},
         {'name': 'newly_added', 'in': 'query', 'type': 'string', 'description': 'e.g., 24h'},
-        {'name': 'sort', 'in': 'query', 'type': 'string', 'description': 'e.g., auction_date asc'}
+        
+        # Sorting
+        {'name': 'sort', 'in': 'query', 'type': 'string', 'description': 'e.g., auction_date asc, price desc'},
+        
+        # ← Pagination parameters (NEW)
+        {'name': 'page', 'in': 'query', 'type': 'integer', 'default': 1, 'description': 'Page number (starts from 1)'},
+        {'name': 'limit', 'in': 'query', 'type': 'integer', 'default': 20, 'description': 'Items per page (max 100 recommended)'},
     ],
     'responses': {
-        '200': {'description': 'Search results'}
+        '200': {
+            'description': 'Paginated search results',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'results': {'type': 'array', 'items': {'type': 'object'}},
+                    'pagination': {
+                        'type': 'object',
+                        'properties': {
+                            'page': {'type': 'integer'},
+                            'limit': {'type': 'integer'},
+                            'total': {'type': 'integer'},
+                            'pages': {'type': 'integer'},
+                            'has_next': {'type': 'boolean'},
+                            'has_prev': {'type': 'boolean'}
+                        }
+                    }
+                }
+            }
+        }
     }
 })
 def search():
     params = request.args.to_dict()
-    query = build_query(params)
-    sort_str = params.get('sort', 'auction_date asc').split()
-    sort_field = sort_str[0]
-    sort_dir = 1 if len(sort_str) > 1 and sort_str[1].lower() == 'asc' else -1
-    results = lots_collection.find(query).sort(sort_field, sort_dir)
-    return jsonify([dict(result, **{'_id': str(result['_id'])}) for result in results])
 
+    # ── Pagination parameters ───────────────────────────────
+    try:
+        page = int(params.get('page', 1))
+        limit = int(params.get('limit', 20))
+    except ValueError:
+        page = 1
+        limit = 20
+
+    # Safety limits
+    page = max(1, page)
+    limit = max(1, min(100, limit))  # don't allow crazy values
+
+    skip = (page - 1) * limit
+
+    # ── Build query & sorting ────────────────────────────────
+    query = build_query(params)
+
+    sort_str = params.get('sort', 'auction_date asc')
+    sort_parts = sort_str.split()
+
+    # Support multiple fields sorting (price desc, year asc, etc)
+    sort_list = []
+    i = 0
+    while i < len(sort_parts):
+        field = sort_parts[i]
+        direction = 1  # asc by default
+
+        if i + 1 < len(sort_parts) and sort_parts[i + 1].lower() in ('asc', 'desc'):
+            direction = 1 if sort_parts[i + 1].lower() == 'asc' else -1
+            i += 2
+        else:
+            i += 1
+
+        sort_list.append((field, direction))
+
+    if not sort_list:
+        sort_list = [('auction_date', 1)]  # fallback
+
+    # ── Execute query with pagination ────────────────────────
+    total = lots_collection.count_documents(query)
+    cursor = (
+        lots_collection
+        .find(query)
+        .sort(sort_list)
+        .skip(skip)
+        .limit(limit)
+    )
+
+    results = [
+        {**doc, '_id': str(doc['_id'])}
+        for doc in cursor
+    ]
+
+    # ── Prepare response ─────────────────────────────────────
+    total_pages = ceil(total / limit) if limit > 0 else 1
+
+    response = {
+        "results": results,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1
+        }
+    }
+
+    return jsonify(response), 200
 @app.route('/api/lot/<lot_id>', methods=['GET'])
 @swag_from({
     'tags': ['Auctions'],
