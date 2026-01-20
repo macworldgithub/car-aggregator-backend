@@ -5441,6 +5441,9 @@ def build_query(params):
             query['scrape_time'] = {'$gte': time_ago}
         except:
             pass
+    if 'title' in params and params['title'].strip():
+        # Case-insensitive partial match on title
+        query['title'] = {'$regex': params['title'].strip(), '$options': 'i'}
     return query
 
 def scrape_all():
@@ -5649,6 +5652,7 @@ def calendar():
     'parameters': [
         {'name': 'make', 'in': 'query', 'type': 'string'},
         {'name': 'model', 'in': 'query', 'type': 'string'},
+        {'name': 'title', 'in': 'query', 'type': 'string', 'description': 'Search in lot title (partial match, case-insensitive)'},
         {'name': 'variant', 'in': 'query', 'type': 'string'},
         {'name': 'year_min', 'in': 'query', 'type': 'integer'},
         {'name': 'year_max', 'in': 'query', 'type': 'integer'},
