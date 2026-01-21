@@ -5459,7 +5459,7 @@ def scrape_seven82motors():
             # Build lot document
             # ────────────────────────────────────────────────
             lot_path = item.get('path', '').lstrip('/')
-            lot_url = f"https://www.seven82motors.com.au/auctions/{lot_path}" if lot_path else ""
+            lot_url = f"https://www.seven82motors.com.au/lot/{lot_path}" if lot_path else ""
             
             lot = {
                 'source': 'seven82motors',
