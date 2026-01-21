@@ -4562,118 +4562,153 @@ def scrape_chicane(url='https://www.chicaneauctions.com.au/february-2026-classic
 def scrape_lloydsonline(url='https://www.lloydsonline.com.au/AuctionLots.aspx?stype=0&stypeid=0&cid=410&smode=0'):
     """
     Scrape classic car auctions from lloydsonline.com.au
-    Special focus: clean imagedelivery.net image URLs without thumbnail params
     """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
-    
     try:
         resp = requests.get(url, headers=headers, timeout=20)
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            print(f"Lloyds returned {resp.status_code}")
+            return []
+        html_content = resp.text
     except Exception as e:
         print(f"Error fetching Lloyds: {e}")
         return []
 
-    soup = BeautifulSoup(resp.text, 'html.parser')
+    soup = BeautifulSoup(html_content, 'html.parser')
     listings = []
     base_url = 'https://www.lloydsonline.com.au'
 
     for item in soup.select('.gallery_item.lot_list_item'):
         try:
-            # ── Link / URL ────────────────────────────────────────
-            link_tag = item.select_one('a[href^="LotDetails.aspx"]')
-            relative_href = link_tag.get('href') if link_tag else None
-            full_url = base_url + '/' + relative_href.lstrip('/') if relative_href else None
+            # ────────────────────────────────────────────────
+            # Link and URL
+            # ────────────────────────────────────────────────
+            link = item.select_one('a[href^="LotDetails.aspx"]')
+            relative_href = link.get('href') if link else None
+            full_url = None
+            if relative_href:
+                full_url = base_url + '/' + relative_href.lstrip('/')
 
-            # ── Lot number ────────────────────────────────────────
+            # Lot number
             lot_num_elem = item.select_one('.lot_num')
-            lot_num = lot_num_elem.get_text(strip=True) if lot_num_elem else None
+            lot_num = lot_num_elem.text.strip() if lot_num_elem else None
 
-            # ── Image ─────────────────────────────────────────────
+            # ────────────────────────────────────────────────
+            # Image – keep full imagedelivery.net URLs
+            # ────────────────────────────────────────────────
             img_tag = item.select_one('.lot_img img')
             img_src = None
             if img_tag and img_tag.has_attr('src'):
-                src = img_tag['src']
-                if src.startswith('//'):
-                    src = 'https:' + src
-                
-                # Prefer imagedelivery.net URLs and clean size params
-                if 'imagedelivery.net' in src:
-                    # Remove size/crop params to get cleaner / base version
-                    clean_src = re.sub(r'/(w=\d+,h=\d+,fit=[^/]+)?$', '', src)
-                    clean_src = re.sub(r'\?.*$', '', clean_src)  # remove any query string if unwanted
-                    img_src = clean_src
-                else:
-                    img_src = src
+                img_src = img_tag['src'].strip()
+                # Ensure it's absolute (very rare case, but just in case)
+                if img_src.startswith('//'):
+                    img_src = 'https:' + img_src
+                # We keep the full imagedelivery URL with parameters (w=210,h=140,fit=pad etc.)
 
             images = [img_src] if img_src else []
 
-            # ── Title / Description ───────────────────────────────
-            desc_container = item.select_one('.lot_desc')
-            title = ''
-            if desc_container:
-                # Sometimes it's in <span>, <div>, or direct text
-                title_tag = desc_container.find(['h1', 'span', 'div'], recursive=True)
-                title = title_tag.get_text(strip=True) if title_tag else desc_container.get_text(strip=True)
+            # ────────────────────────────────────────────────
+            # Title / Description
+            # ────────────────────────────────────────────────
+            # Note: in the HTML you showed, there is no <h1> inside .lot_desc
+            # Adjust selector if needed — here assuming it's just text
+            desc_elem = item.select_one('.lot_desc')
+            title = desc_elem.get_text(strip=True) if desc_elem else ''
 
-            # Try to parse year/make/model (common pattern)
-            year = make = model = None
-            m = re.match(r'^(\d{4})\s+([^\s]+)\s+(.+?)(?:\s+|$)', title, re.IGNORECASE)
+            # Parse year, make, model from title (common pattern: "YYYY Make Model ...")
+            year = None
+            make = ''
+            model = ''
+            m = re.match(r'^(\d{4})\s+(.+?)\s+(.+?)(?:\s+|$)', title)
             if m:
                 try:
                     year = int(m.group(1))
                 except ValueError:
                     pass
-                make  = m.group(2).strip()
+                make = m.group(2).strip()
                 model = m.group(3).strip()
 
-            # ── Current bid (if visible in list view) ─────────────
-            bid_tag = item.select_one('.lot_bidding .lot_cur_bid span')  # adjust selector if needed
-            current_bid_str = bid_tag.get_text(strip=True) if bid_tag else None
+            # Current bid (adjust selector if needed — not visible in your HTML snippet)
+            bid_tag = item.select_one('.lot_cur_bid span, .lot_bidding span')
+            current_bid_str = bid_tag.get_text(strip=True) if bid_tag else '0'
             current_bid = None
-            if current_bid_str:
-                cleaned = re.sub(r'[^\d.]', '', current_bid_str)
+            try:
+                current_bid = float(re.sub(r'[^\d.]', '', current_bid_str))
+            except (ValueError, TypeError):
+                pass
+
+            # Time remaining / auction end (not visible in your snippet — placeholder logic)
+            time_rem_tag = item.select_one('[data-seconds_rem]')
+            seconds_rem = 0
+            if time_rem_tag and time_rem_tag.has_attr('data-seconds_rem'):
                 try:
-                    current_bid = float(cleaned)
+                    seconds_rem = int(time_rem_tag['data-seconds_rem'])
                 except ValueError:
                     pass
+            auction_end = datetime.utcnow() + timedelta(seconds=seconds_rem) if seconds_rem > 0 else None
 
-            # ── Time remaining / auction end (if present) ─────────
-            time_tag = item.select_one('[data-seconds_rem]')
-            auction_end = None
-            if time_tag and time_tag.has_attr('data-seconds_rem'):
-                try:
-                    secs = int(time_tag['data-seconds_rem'])
-                    if secs > 0:
-                        auction_end = datetime.utcnow() + timedelta(seconds=secs)
-                except ValueError:
-                    pass
+            # Location / state logic (not visible in snippet — keeping your original approach)
+            location_img = item.select_one('.auctioneer-location img')
+            state_src = location_img.get('src', '').split('/')[-1] if location_img else ''
+            state_map = {
+                's_1.png': 'ACT', 's_2.png': 'NT', 's_3.png': 'NSW',
+                's_4.png': 'QLD', 's_5.png': 'SA', 's_6.png': 'TAS',
+                's_7.png': 'WA',  's_8.png': 'VIC',
+            }
+            state = state_map.get(state_src, '')
+            location = {'state': state}
 
-            # ── Build lot dictionary ──────────────────────────────
-            lot = {
-                'source':       'lloydsonline',
-                'lot_number':   lot_num,
-                'title':        title,
-                'url':          full_url,
-                'year':         year,
-                'make':         make,
-                'model':        model,
-                'current_bid':  current_bid,
-                'auction_end':  auction_end.isoformat() if auction_end else None,
-                'images':       images,               # ← now contains clean imagedelivery.net URL
-                'scrape_time':  datetime.utcnow().isoformat(),
-                # Add more fields as needed: location, reserve, etc.
+            # Reserve status (example — adjust selector if needed)
+            unreserved = item.select_one('.sash.ribbon-blue')
+            reserve = 'No' if unreserved and 'UNRESERVED' in (unreserved.get_text(strip=True) or '').upper() else 'Yes'
+
+            # Vehicle info
+            vehicle = {
+                'year': year,
+                'make': make,
+                'model': model,
             }
 
-            if is_classic(lot):
+            price = {
+                'current': current_bid,
+            }
+
+            condition = {
+                'comment': title,
+            }
+
+            # ────────────────────────────────────────────────
+            # Final lot dictionary
+            # ────────────────────────────────────────────────
+            lot = {
+                'source': 'lloydsonline',
+                'auction_id': lot_num,  # or use data-lot_id if available
+                'title': title,
+                'url': full_url,
+                'year': year,
+                'make': make,
+                'model': model,
+                'vehicle': vehicle,
+                'price': price,
+                'auction_end': auction_end,
+                'location': location,
+                'images': images,               # ← full imagedelivery URLs preserved
+                'condition': condition,
+                'reserve': reserve,
+                'status': 'live' if seconds_rem > 0 else 'ended',
+                'scrape_time': datetime.utcnow(),
+            }
+
+            # Only add if it's likely a classic (your filter)
+            if is_classic(lot):  # ← assuming you have this function
                 listings.append(lot)
 
         except Exception as e:
-            print(f"Error parsing lot: {e}")
+            print(f"Error parsing Lloyds lot: {str(e)}")
 
     return listings
-
 def scrape_carbids_api():
     """
     Scrape current auctions from carbids.com.au using the real /Search/Tags endpoint
