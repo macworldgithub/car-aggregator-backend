@@ -116,6 +116,11 @@ SOURCES = [
         # {'url': 'https://burnsandcoauctions.com.au', 'name': 'burnsandco'},
 ]
 
+# def get_driver():
+#     options = Options()
+#     options.headless = True
+#     service = Service(ChromeDriverManager().install())
+#     return webdriver.Chrome(service=service, options=options)
 
 def get_driver():
     options = Options()
@@ -512,6 +517,143 @@ def scrape_chicane(url='https://www.chicaneauctions.com.au/february-2026-classic
     print(f"Total real listings found: {len(listings)}")
     return listings
 
+# def scrape_lloydsonline(url='https://www.lloydsonline.com.au/AuctionLots.aspx?stype=0&stypeid=0&cid=410&smode=0'):
+#     """
+#     Scrape classic car auctions from lloydsonline.com.au
+#     """
+#     headers = {
+#         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+#     }
+#     try:
+#         resp = requests.get(url, headers=headers, timeout=20)
+#         if resp.status_code != 200:
+#             print(f"Lloyds returned {resp.status_code}")
+#             return []
+#         html_content = resp.text
+#     except Exception as e:
+#         print(f"Error fetching Lloyds: {e}")
+#         return []
+
+#     soup = BeautifulSoup(html_content, 'html.parser')
+#     listings = []
+#     base_url = 'https://www.lloydsonline.com.au'
+
+#     for item in soup.select('.gallery_item.lot_list_item'):
+#         try:
+#             # Link and URL
+#             link = item.select_one('a')
+#             relative_href = link.get('href', None) if link else None
+#             full_url = base_url + '/' + relative_href.lstrip('/') if relative_href else None
+
+#             # Lot number
+#             lot_num_elem = item.select_one('.lot_num')
+#             lot_num = lot_num_elem.text.strip() if lot_num_elem else None
+
+#             # Image
+#             img_tag = item.select_one('.lot_img')
+#             img_src = img_tag.get('src', None) if img_tag else None
+#             if img_src and img_src.startswith('//'):
+#                 img_src = 'https:' + img_src
+#             images = [img_src] if img_src else []
+
+#             # Title / Description
+#             title_tag = item.select_one('.lot_desc h1')
+#             title = title_tag.text.strip() if title_tag else ''
+
+#             # Parse year, make, model from title (common pattern: "YYYY Make Model ...")
+#             year = None
+#             make = ''
+#             model = ''
+#             m = re.match(r'^(\d{4})\s+(.+?)\s+(.+?)(?:\s+|$)', title)
+#             if m:
+#                 year_str = m.group(1)
+#                 try:
+#                     year = int(year_str)
+#                 except:
+#                     pass
+#                 make = m.group(2).strip()
+#                 model = m.group(3).strip()
+
+#             # Current bid
+#             bid_tag = item.select_one('.lot_cur_bid span')
+#             current_bid_str = bid_tag.text.strip() if bid_tag else '0'
+#             current_bid = float(re.sub(r'[^\d.]', '', current_bid_str)) if current_bid_str else None
+
+#             # Time remaining
+#             time_rem_tag = item.select_one('.lot_time_rem span')
+#             seconds_rem_str = time_rem_tag.get('data-seconds_rem', '0') if time_rem_tag else '0'
+#             seconds_rem = int(seconds_rem_str) if seconds_rem_str.isdigit() else 0
+#             auction_end = datetime.utcnow() + timedelta(seconds=seconds_rem) if seconds_rem > 0 else None
+
+#             # Location (state from image src)
+#             location_img = item.select_one('.auctioneer-location')
+#             state_src = location_img.get('src', '').split('/')[-1] if location_img else ''
+#             state_map = {
+#                 's_1.png': 'ACT',
+#                 's_2.png': 'NT',
+#                 's_3.png': 'NSW',
+#                 's_4.png': 'QLD',
+#                 's_5.png': 'SA',
+#                 's_6.png': 'TAS',
+#                 's_7.png': 'WA',
+#                 's_8.png': 'VIC',
+#             }
+#             state = state_map.get(state_src, '')
+
+#             location = {
+#                 'state': state,
+#             }
+
+#             # Reserve (check for UNRESERVED sash)
+#             unreserved = item.select_one('.sash.ribbon-blue')
+#             reserve = 'No' if unreserved and 'UNRESERVED' in (unreserved.text or '').upper() else 'Yes'
+
+#             # Vehicle specs (limited, from title)
+#             vehicle = {
+#                 'year': year,
+#                 'make': make,
+#                 'model': model,
+#                 # Add more if details available in list view (none visible)
+#             }
+
+#             # Price info
+#             price = {
+#                 'current': current_bid,
+#                 # No starting bid visible
+#             }
+
+#             # Condition (use title as comment)
+#             condition = {
+#                 'comment': title,
+#             }
+
+#             # Build lot dict
+#             lot = {
+#                 'source': 'lloydsonline',
+#                 'auction_id': time_rem_tag.get('data-lot_id', lot_num) if time_rem_tag else lot_num,
+#                 'title': title,
+#                 'url': full_url,
+#                 'year': year,
+#                 'make': make,
+#                 'model': model,
+#                 'vehicle': vehicle,
+#                 'price': price,
+#                 'auction_end': auction_end,
+#                 'location': location,
+#                 'images': images,
+#                 'condition': condition,
+#                 'reserve': reserve,
+#                 'status': 'live',
+#                 'scrape_time': datetime.utcnow(),
+#             }
+
+#             if is_classic(lot):  # Assume you have an is_classic function to filter classics
+#                 listings.append(lot)
+
+#         except Exception as e:
+#             print(f"Error parsing Lloyds lot: {str(e)}")
+
+#     return listings
 
 def scrape_lloydsonline(url='https://www.lloydsonline.com.au/AuctionLots.aspx?stype=0&stypeid=0&cid=410&smode=0'):
     """
@@ -885,6 +1027,83 @@ def scrape_carbids(base_url):
             unique.append(lot)
 
     return unique
+# def scrape_bennetts(base_url):
+    pages = [base_url, base_url + '/off-site.php']
+    all_listings = []
+    for page_url in pages:
+        try:
+            driver = get_driver()
+            driver.get(page_url)
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            driver.quit()
+            sitename = soup.find('div', id='sitename')
+            h3 = sitename.find('h3') if sitename else None
+            auction_text = h3.text.strip() if h3 else ''
+            date_match = re.search(r'(\d{1,2}[ST|ND|RD|TH]{0,2} \w+ \d{4})', auction_text.upper())
+            time_match = re.search(r'@ (\d{1,2}[AP]M)', auction_text.upper())
+            auction_date_str = ''
+            if date_match:
+                date_str = re.sub(r'([ST|ND|RD|TH])', '', date_match.group(1))
+                auction_date_str += date_str
+            if time_match:
+                auction_date_str += ' ' + time_match.group(1)
+            auction_date = None
+            try:
+                auction_date = parse(auction_date_str)
+            except:
+                pass
+            sections = soup.find_all('div', class_='clear')
+            for section in sections:
+                column = section.find('div', class_='column column-600 column-left')
+                if column:
+                    h3_cat = column.find('h3')
+                    category = h3_cat.text.strip() if h3_cat else ''
+                    table = column.find('table')
+                    if table:
+                        tbody = table.find('tbody')
+                        trs = tbody.find_all('tr') if tbody else table.find_all('tr')
+                        for tr in trs[1:]:
+                            tds = tr.find_all('td')
+                            if len(tds) == 7:
+                                photo_td = tds[0]
+                                a = photo_td.find('a')
+                                detail_url = base_url + '/' + a['href'].lstrip('/') if a else ''
+                                img = photo_td.find('img')
+                                image_src = base_url + '/' + img['src'].lstrip('/') if img and img['src'].startswith('images') else img['src']
+                                make = tds[1].text.strip()
+                                stock_model = tds[2].text.strip()
+                                parts = stock_model.split('/')
+                                stock_ref = parts[0].strip() if parts else ''
+                                model = parts[1].strip() if len(parts) > 1 else stock_model
+                                year_str = tds[3].text.strip()
+                                try:
+                                    year = int(year_str)
+                                except:
+                                    year = 0
+                                options = tds[4].text.strip()
+                                location_td = tds[5]
+                                location = location_td.text.strip().replace('\n', '').replace('br /', '')
+                                lot = {
+                                    'source': 'bennettsclassicauctions',
+                                    'make': make,
+                                    'model': model,
+                                    'year': year,
+                                    'price_range': None,
+                                    'auction_date': auction_date,
+                                    'location': location,
+                                    'images': [image_src] if image_src else [],
+                                    'url': detail_url,
+                                    'description': options,
+                                    'reserve': 'Yes',
+                                    'body_style': extract_body_style(options),
+                                    'transmission': extract_transmission(options),
+                                    'scrape_time': datetime.now()
+                                }
+                                if is_classic(lot):
+                                    all_listings.append(lot)
+        except Exception as e:
+            pass
+    return all_listings
 
 def scrape_bennetts(base_url="https://www.bennettsclassicauctions.com.au"):
     pages = [base_url, base_url + '/off-site.php']
@@ -1029,6 +1248,192 @@ from datetime import datetime, timezone, timedelta
 import requests
 import re
 from dateutil.parser import parse
+
+# def scrape_seven82motors():
+#     """
+#     Scrape upcoming lots from seven82motors.com.au using their JSON feed.
+#     Example endpoint: https://seven82-json-sb.manage.auction/listings/auctions/march-29th-2026?amt=100
+    
+#     Returns list of lot dictionaries matching your existing schema.
+#     """
+#     listings = []
+    
+#     # For now using a known upcoming auction slug
+#     # In production: you should discover current/upcoming slugs dynamically
+#     auction_slug = "march-29th-2026"
+#     api_url = f"https://seven82-json-sb.manage.auction/listings/auctions/{auction_slug}?amt=100"
+    
+#     headers = {
+#         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+#                       '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+#         'Accept': 'application/json',
+#         'Referer': 'https://www.seven82motors.com.au/',
+#     }
+    
+#     try:
+#         resp = requests.get(api_url, headers=headers, timeout=20)
+#         resp.raise_for_status()
+#         data = resp.json()
+        
+#         auction_title = data.get("heading", "Unknown Auction Date")
+        
+#         # Try to parse auction date from breadcrumbs or heading
+#         auction_date = None
+#         try:
+#             bc_title = data.get("breadcrumbs", [{}])[0].get("title", "")
+#             if bc_title and any(m in bc_title.lower() for m in ["mar", "march", "apr", "may"]):
+#                 # e.g. "Mar 29, 2026"
+#                 auction_date = parse(f"{bc_title} 2026", fuzzy=True)
+#         except:
+#             pass
+        
+#         if not auction_date:
+#             try:
+#                 auction_date = parse(auction_title, fuzzy=True)
+#             except:
+#                 auction_date = datetime.now(timezone.utc) + timedelta(days=45)  # reasonable fallback
+        
+#         items = data.get("items", [])
+        
+#         for item in items:
+#             # Skip advertising / consignment slots
+#             if item.get("dummy_lot", 0) == 1:
+#                 continue
+                
+#             title = (item.get("title") or "").strip()
+#             if not title:
+#                 continue
+                
+#             # Skip obvious non-car listings
+#             if any(phrase in title.upper() for phrase in [
+#                 "SELL YOUR CAR", "CONSIGN", "REGISTER AND BID", "LEARN HOW TO"
+#             ]):
+#                 continue
+                
+#             # ────────────────────────────────────────────────
+#             # Year / Make / Model parsing
+#             # ────────────────────────────────────────────────
+#             year = None
+#             make = ""
+#             model = ""
+            
+#             # Remove common prefixes
+#             clean_title = re.sub(
+#                 r'^(NO RESERVE!?\s*|RARE\s*|FULLY RESTORED\s*|CUSTOM\s*)',
+#                 '', title, flags=re.IGNORECASE
+#             ).strip()
+            
+#             # Common patterns: "1969 Holden HT 350 GTS Monaro"
+#             #                 "1972 Ford 4x4 Bronco"
+#             m = re.match(r'^(\d{4})\s+(.+?)(?:\s+(.+?))?(?:\s+|$)', clean_title)
+#             if m:
+#                 try:
+#                     year = int(m.group(1))
+#                 except:
+#                     pass
+#                 make_model_part = (m.group(2) or "").strip()
+#                 extra = (m.group(3) or "").strip()
+                
+#                 # Simple split - will not be perfect but good enough for filtering
+#                 parts = make_model_part.split(maxsplit=1)
+#                 if parts:
+#                     make = parts[0].strip()
+#                     if len(parts) > 1:
+#                         model = parts[1].strip()
+#                     model = f"{model} {extra}".strip()
+            
+#             # Reserve status from title (very reliable on this site)
+#             reserve = "No" if "NO RESERVE" in title.upper() else "Yes"
+            
+#             # ────────────────────────────────────────────────
+#             # Images
+#             # ────────────────────────────────────────────────
+#             images = []
+            
+#             # 1. media_featured → list of dicts
+#             featured = item.get("media_featured", [])
+#             if isinstance(featured, list):
+#                 for img_obj in featured:
+#                     if isinstance(img_obj, dict):
+#                         src = img_obj.get("src")
+#                         if src:
+#                             if src.startswith("/"):
+#                                 src = "https://www.seven82motors.com.au" + src
+#                             elif not src.startswith("http"):
+#                                 src = "https://www.seven82motors.com.au/" + src
+#                             if src not in images:
+#                                 images.append(src)
+            
+#             # 2. fallback to main image field
+#             main_img = item.get("image")
+#             if main_img and main_img not in images:
+#                 if main_img.startswith("catalog/"):
+#                     main_img = "https://www.seven82motors.com.au/" + main_img
+#                 images.insert(0, main_img)
+            
+#             # Deduplicate while preserving order
+#             seen = set()
+#             images = [x for x in images if x not in seen and not seen.add(x)]
+            
+#             # ────────────────────────────────────────────────
+#             # Coming soon flag – safely handled
+#             # ────────────────────────────────────────────────
+#             is_coming_soon = False
+#             coming_soon_data = item.get("coming_soon", [])
+#             if isinstance(coming_soon_data, list):
+#                 for entry in coming_soon_data:
+#                     if isinstance(entry, dict):
+#                         settings = entry.get("settings", {})
+#                         if settings.get("coming_soon") in (True, "1", 1, "true"):
+#                             is_coming_soon = True
+#                             break
+            
+#             # ────────────────────────────────────────────────
+#             # Build lot document
+#             # ────────────────────────────────────────────────
+#             lot_url = f"https://www.seven82motors.com.au/auctions/{item.get('path', '').lstrip('/')}"
+            
+#             lot = {
+#                 'source': 'seven82motors',
+#                 'status': 'upcoming',
+#                 'auction_id': item.get("id"),
+#                 'lot_number': item.get("number"),
+#                 'title': title,
+#                 'year': year,
+#                 'make': make,
+#                 'model': model,
+#                 'odometer': None,                    # detail page only
+#                 'price_range': None,                 # not visible in list
+#                 'auction_date': auction_date,
+#                 'location': "Brisbane, QLD (Online)",
+#                 'images': images[:12],               # reasonable limit
+#                 'url': lot_url,
+#                 'description': (item.get("description_short") or "").strip(),
+#                 'reserve': reserve,
+#                 'body_style': None,
+#                 'transmission': None,
+#                 'fuel_type': None,
+#                 'scrape_time': datetime.now(timezone.utc),
+                
+#                 # Optional / diagnostic fields
+#                 'coming_soon': is_coming_soon,
+#                 'buyers_premium_pct': 8.8,           # hard-coded from feed
+#                 'raw_filters': item.get("filters", {}),
+#             }
+            
+#             # Only keep if it passes your classic car filter
+#             if is_classic(lot):
+#                 listings.append(lot)
+        
+#         print(f"[seven82motors] Scraped {len(listings)} potential classic lots from '{auction_title}'")
+        
+#     except Exception as e:
+#         print(f"[seven82motors] Error scraping {auction_slug}: {e}")
+#         import traceback
+#         traceback.print_exc()
+    
+#     return listings
+
 
 def scrape_seven82motors():
     """
@@ -1227,6 +1632,51 @@ def scrape_seven82motors():
         traceback.print_exc()
     
     return listings
+
+# def scrape_catalogue(catalogue_url):
+#     listings = []
+#     try:
+#         driver = get_driver()
+#         driver.get(catalogue_url)
+#         soup = BeautifulSoup(driver.page_source, 'html.parser')
+#         driver.quit()
+#         lot_items = soup.find_all('div', class_='lot-item')  # Placeholder, adjust based on site inspection
+#         for item in lot_items:
+#             lot_number = item.find('span', class_='lot-number').text.strip() if item.find('span', class_='lot-number') else ''
+#             desc = item.find('div', class_='lot-description').text.strip() if item.find('div', class_='lot-description') else ''
+#             match = re.match(r'(\d{4})? ?(.*?) (.*)', desc)
+#             year_str = match.group(1) if match and match.group(1) else ''
+#             try:
+#                 year = int(year_str)
+#             except:
+#                 year = 0
+#             make = match.group(2) if match else ''
+#             model = match.group(3) if match else desc
+#             images = [img['src'] for img in item.find_all('img')]
+#             detail_a = item.find('a', class_='lot-detail')
+#             detail_url = catalogue_url + detail_a['href'] if detail_a else ''
+#             current_bid = item.find('span', class_='current-bid').text.strip() if item.find('span', class_='current-bid') else ''
+#             lot = {
+#                 'lot_number': lot_number,
+#                 'make': make,
+#                 'model': model,
+#                 'year': year,
+#                 'price_range': parse_price(current_bid),
+#                 'auction_date': None,
+#                 'location': None,
+#                 'images': images,
+#                 'url': detail_url,
+#                 'description': desc,
+#                 'reserve': 'Yes',
+#                 'body_style': extract_body_style(desc),
+#                 'transmission': extract_transmission(desc),
+#                 'scrape_time': datetime.now()
+#             }
+#             if is_classic(lot):
+#                 listings.append(lot)
+#     except Exception as e:
+#         pass
+#     return listings
 
 from urllib.parse import urljoin
 
