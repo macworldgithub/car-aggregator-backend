@@ -1495,7 +1495,7 @@ def check_alerts(scrape_start):
 
 # Scheduler
 scheduler = BackgroundScheduler()
-scheduler.add_job(scrape_all, 'interval', hours=4)
+scheduler.add_job(scrape_all, 'interval', hours=1)
 scheduler.start()
 
 @app.route('/api/scrape', methods=['POST'])
